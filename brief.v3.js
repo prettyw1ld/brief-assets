@@ -15,21 +15,41 @@
     tr.innerHTML='<td>'+(s.u?'<a href="'+esc(s.u)+'" target="_blank" rel="noopener">'+esc(s.t)+'</a>':esc(s.t))+'</td><td><button class="ref '+s.c+'" data-s="'+k+'" aria-label="Источник">'+s.c+'</button></td><td class="mono">'+esc(s.d||'—')+'</td>';rows.appendChild(tr)});
 
   /* ---- поповер источника ---- */
-  var pop=$('#pop'),cur=null;
-  function show(btn){var s=SRC[btn.dataset.s];if(!s||!pop)return;cur=btn;
-    pop.innerHTML='<div class="k"><i>'+s.c+'</i>'+CL[s.c]+' · '+esc(s.d||'—')+'</div><b>'+esc(s.t)+'</b>'+(s.q?'<span class="q">«'+esc(s.q)+'»</span>':'')+(s.u?'<a href="'+esc(s.u)+'" target="_blank" rel="noopener">Открыть источник ↗</a>':'');
+  /* Наведение — показать; увести мышь с метки и окошка — скрыть через 200 мс.
+     Повторный клик по той же метке, клик мимо, Esc или крестик — скрыть. */
+  var pop=$('#pop'),cur=null,clicked=false,timer=0,mute=null;
+  var HOVER=matchMedia('(hover:hover) and (pointer:fine)').matches;
+  function show(btn){var s=SRC[btn.dataset.s];if(!s||!pop)return;clearTimeout(timer);
+    if(cur&&cur!==btn)cur.removeAttribute('aria-expanded');cur=btn;clicked=false;btn.setAttribute('aria-expanded','true');
+    pop.innerHTML='<button class="x" type="button" aria-label="Закрыть">×</button><div class="k"><i>'+s.c+'</i>'+CL[s.c]+' · '+esc(s.d||'—')+'</div><b>'+esc(s.t)+'</b>'+(s.q?'<span class="q">«'+esc(s.q)+'»</span>':'')+(s.u?'<a href="'+esc(s.u)+'" target="_blank" rel="noopener">Открыть источник ↗</a>':'');
     pop.hidden=false;
     var r=btn.getBoundingClientRect(),w=pop.offsetWidth,h=pop.offsetHeight,vw=innerWidth,vh=innerHeight;
     if(vw<560){pop.style.cssText='left:12px;right:12px;max-width:none;top:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px))'}
-    else{var l=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12),t=r.bottom+8;if(t+h>vh-12)t=r.top-h-8;pop.style.cssText='left:'+l+'px;top:'+t+'px;right:auto;bottom:auto'}}
-  function hide(){if(pop)pop.hidden=true;cur=null}
-  document.addEventListener('click',function(e){var b=e.target.closest('.ref[data-s]');if(b){e.preventDefault();e.stopPropagation();cur===b?hide():show(b);return}if(pop&&!pop.contains(e.target))hide()});
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')hide()});
+    else{var l=Math.min(Math.max(12,r.left+r.width/2-w/2),vw-w-12),t=r.bottom+6;if(t+h>vh-12)t=r.top-h-6;pop.style.cssText='left:'+l+'px;top:'+t+'px;right:auto;bottom:auto'}}
+  function hide(){clearTimeout(timer);if(pop)pop.hidden=true;if(cur)cur.removeAttribute('aria-expanded');cur=null;clicked=false}
+  function hideSoon(){clearTimeout(timer);timer=setTimeout(hide,200)}
+  document.addEventListener('click',function(e){
+    if(e.target.closest('#pop .x')){hide();return}
+    var b=e.target.closest('.ref[data-s]');
+    if(b){e.preventDefault();e.stopPropagation();
+      if(cur!==b){show(b);clicked=true}            /* окошко закрыто — открыть */
+      else if(HOVER&&!clicked){clicked=true}       /* открыто наведением — первый клик его «закрепляет» */
+      else{hide();mute=b}                          /* повторный клик — закрыть и не открывать снова, пока мышь на метке */
+      return}
+    if(pop&&!pop.contains(e.target))hide()});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&cur){var b=cur;hide();b.focus()}});
   addEventListener('scroll',function(){if(cur&&innerWidth>=560)hide()},{passive:true});
-  if(matchMedia('(hover:hover)').matches&&pop){
-    document.addEventListener('mouseover',function(e){var b=e.target.closest('.ref[data-s]');if(b&&b!==cur)show(b)});
-    document.addEventListener('mouseout',function(e){var b=e.target.closest('.ref[data-s]');if(b&&!(e.relatedTarget&&pop.contains(e.relatedTarget)))setTimeout(function(){if(!pop.matches(':hover'))hide()},140)});
-    pop.addEventListener('mouseleave',hide)}
+  addEventListener('resize',function(){if(cur)hide()});
+  if(HOVER&&pop){
+    document.addEventListener('mouseover',function(e){var b=e.target.closest('.ref[data-s]');
+      if(b){if(b===mute)return;if(b!==cur)show(b);else clearTimeout(timer);return}
+      if(pop.contains(e.target))clearTimeout(timer)});
+    document.addEventListener('mouseout',function(e){var to=e.relatedTarget;
+      var fromRef=e.target.closest('.ref[data-s]'),fromPop=pop.contains(e.target);
+      if(fromRef&&fromRef===mute&&!(to&&fromRef.contains(to)))mute=null;
+      if(!cur||!(fromRef===cur||fromPop))return;
+      if(to&&(pop.contains(to)||cur.contains(to)))return;
+      hideSoon()})}
 
   /* ---- режим ---- */
   var bB=$('#m-brief'),bF=$('#m-full');
